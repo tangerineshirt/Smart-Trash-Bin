@@ -1,6 +1,5 @@
 #include <Smart-Trash-Bin-9_inferencing.h>
 #include "edge-impulse-sdk/dsp/image/image.hpp"
-#include "edge-impulse-sdk/porting/ei_camera.h"
 #include "esp_camera.h"
 #include <esp_now.h>
 #include <WiFi.h>

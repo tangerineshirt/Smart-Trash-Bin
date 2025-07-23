@@ -29,7 +29,7 @@ typedef struct struct_message {
   char label[32];
 } struct_message;
 
-struct_message incomingData;
+struct_message incomingDataStruct;
 
 // ====== FUNGSI ULTRASONIK ======
 long ukurJarakCM(int trigger, int echo) {
@@ -42,14 +42,22 @@ long ukurJarakCM(int trigger, int echo) {
 }
 
 // ====== CALLBACK ESP-NOW ======
-void onReceiveData(const uint8_t * mac, const uint8_t *incoming, int len) {
-  memcpy(&incomingData, incoming, sizeof(incomingData));
-  currentLabel = String(incomingData.label);
+void onReceiveData(const esp_now_recv_info_t *info, const uint8_t *incomingData, int len) {
+  memcpy(&incomingDataStruct, incomingData, sizeof(incomingDataStruct));
+  currentLabel = String(incomingDataStruct.label);
   labelBaruDiterima = true;
+
   Serial.print("Label diterima: ");
   Serial.println(currentLabel);
-}
 
+  Serial.print("MAC pengirim: ");
+  char macStr[18];
+  snprintf(macStr, sizeof(macStr),
+           "%02X:%02X:%02X:%02X:%02X:%02X",
+           info->src_addr[0], info->src_addr[1], info->src_addr[2],
+           info->src_addr[3], info->src_addr[4], info->src_addr[5]);
+  Serial.println(macStr);
+}
 // ====== SETUP ======
 void setup() {
   Serial.begin(115200);
