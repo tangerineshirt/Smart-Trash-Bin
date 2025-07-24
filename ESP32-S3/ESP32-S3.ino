@@ -3,13 +3,13 @@
 #include <ESP32Servo.h>
 
 // ====== KONFIGURASI PIN ======
-#define SERVO_PIN        13
-#define US_TRIGGER       5
-#define US_ECHO          4
-#define US_PENUH_KERTAS         18
-#define US_PENUH_ECHO_KERTAS    19
-#define US_PENUH_PLASTIK        21
-#define US_PENUH_ECHO_PLASTIK   22
+#define SERVO_PIN 13
+#define US_TRIGGER 5
+#define US_ECHO 4
+#define US_PENUH_KERTAS 18
+#define US_PENUH_ECHO_KERTAS 19
+#define US_PENUH_PLASTIK 21
+#define US_PENUH_ECHO_PLASTIK 22
 
 #define JARAK_SAMPAH_MIN_CM 10
 #define WAKTU_PENUH_MS 10000  // 10 detik stabil di bawah threshold → penuh
@@ -18,6 +18,8 @@
 Servo servo;
 String currentLabel = "";
 bool labelBaruDiterima = false;
+
+int jmlKertas = 0, jmlPlastik = 0;
 
 unsigned long waktuAwalPenuhKertas = 0;
 bool kertasPenuh = false;
@@ -33,10 +35,12 @@ struct_message incomingDataStruct;
 
 // ====== FUNGSI ULTRASONIK ======
 long ukurJarakCM(int trigger, int echo) {
-  digitalWrite(trigger, LOW); delayMicroseconds(2);
-  digitalWrite(trigger, HIGH); delayMicroseconds(10);
   digitalWrite(trigger, LOW);
-  long duration = pulseIn(echo, HIGH, 30000); // timeout 30ms
+  delayMicroseconds(2);
+  digitalWrite(trigger, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigger, LOW);
+  long duration = pulseIn(echo, HIGH, 30000);  // timeout 30ms
   long distance = duration * 0.034 / 2;
   return distance;
 }
@@ -111,17 +115,26 @@ void loop() {
   // Gerakkan servo jika menerima label dan ada sampah dekat
   if (labelBaruDiterima && jarakSampah < JARAK_SAMPAH_MIN_CM) {
     labelBaruDiterima = false;
-
     if (currentLabel == "Kertas" || currentLabel == "Kardus") {
-      Serial.println("Sampah ke kiri");
-      servo.write(30);
+      jmlKertas++;
     } else if (currentLabel == "Plastik") {
-      Serial.println("Sampah ke kanan");
-      servo.write(150);
+      jmlPlastik++;
     }
-
-    delay(1000);  // waktu gerakan
-    servo.write(90);  // kembali ke netral
+    if (jmlKertas >= 5) {
+      Serial.println("Sampah ke kiri");
+      servo.write(10);
+      jmlKertas = 0;
+      jmlPlastik = 0;
+      delay(1000);      // waktu gerakan
+      servo.write(90);  // kembali ke netral
+    } else if (jmlPlastik >= 5) {
+      Serial.println("Sampah ke kanan");
+      servo.write(170);
+      jmlKertas = 0;
+      jmlPlastik = 0;
+      delay(1000);      // waktu gerakan
+      servo.write(90);  // kembali ke netral
+    }
   }
 
   // Cetak status penuh
