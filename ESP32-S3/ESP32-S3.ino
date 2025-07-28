@@ -21,17 +21,14 @@ bool labelBaruDiterima = false;
 
 int jmlKertas = 0, jmlPlastik = 0;
 
-unsigned long waktuAwalPenuhKertas = 0;
-bool kertasPenuh = false;
-
-unsigned long waktuAwalPenuhPlastik = 0;
-bool plastikPenuh = false;
-
 typedef struct struct_message {
   char label[32];
 } struct_message;
 
 struct_message incomingDataStruct;
+
+const long selisihTinggi = 21;
+const long globalMaks = 27;
 
 // ====== FUNGSI ULTRASONIK ======
 long ukurJarakCM(int trigger, int echo) {
@@ -43,6 +40,10 @@ long ukurJarakCM(int trigger, int echo) {
   long duration = pulseIn(echo, HIGH, 30000);  // timeout 30ms
   long distance = duration * 0.034 / 2;
   return distance;
+}
+
+long hitungPersen(long jarak, long maks){
+  return 100 - (jarak/maks * 100);
 }
 
 // ====== CALLBACK ESP-NOW ======
@@ -92,25 +93,11 @@ void loop() {
   Serial.print(jarakSampah);
   Serial.println(" cm");
 
-  // Deteksi penuh tong kertas
-  long jarakKertas = ukurJarakCM(US_PENUH_KERTAS, US_PENUH_ECHO_KERTAS);
-  if (jarakKertas < 8) {
-    if (waktuAwalPenuhKertas == 0) waktuAwalPenuhKertas = millis();
-    else if (millis() - waktuAwalPenuhKertas > WAKTU_PENUH_MS) kertasPenuh = true;
-  } else {
-    waktuAwalPenuhKertas = 0;
-    kertasPenuh = false;
-  }
-
-  // Deteksi penuh tong plastik
-  long jarakPlastik = ukurJarakCM(US_PENUH_PLASTIK, US_PENUH_ECHO_PLASTIK);
-  if (jarakPlastik < 8) {
-    if (waktuAwalPenuhPlastik == 0) waktuAwalPenuhPlastik = millis();
-    else if (millis() - waktuAwalPenuhPlastik > WAKTU_PENUH_MS) plastikPenuh = true;
-  } else {
-    waktuAwalPenuhPlastik = 0;
-    plastikPenuh = false;
-  }
+  long penuhKertas = ukurJarakCM(US_PENUH_KERTAS, US_PENUH_ECHO_KERTAS) - selisihTinggi;
+  long penuhPlastik = ukurJarakCM(US_PENUH_PLASTIK, US_PENUH_ECHO_PLASTIK) - selisihTinggi;
+  
+  long persenKertas = hitungPersen(penuhKertas, globalMaks);
+  long persenPlastik = hitungPersen(penuhPlastik, globalMaks);
 
   // Gerakkan servo jika menerima label dan ada sampah dekat
   if (labelBaruDiterima && jarakSampah < JARAK_SAMPAH_MIN_CM) {
@@ -125,23 +112,25 @@ void loop() {
       servo.write(10);
       jmlKertas = 0;
       jmlPlastik = 0;
-      delay(1000);      // waktu gerakan
+      delay(2000);      // waktu gerakan
       servo.write(90);  // kembali ke netral
     } else if (jmlPlastik >= 5) {
       Serial.println("Sampah ke kanan");
       servo.write(170);
       jmlKertas = 0;
       jmlPlastik = 0;
-      delay(1000);      // waktu gerakan
+      delay(2000);      // waktu gerakan
       servo.write(90);  // kembali ke netral
     }
   }
 
-  // Cetak status penuh
-  Serial.print("Kertas penuh? ");
-  Serial.println(kertasPenuh ? "YA" : "TIDAK");
-  Serial.print("Plastik penuh? ");
-  Serial.println(plastikPenuh ? "YA" : "TIDAK");
+  Serial.print("\nKepenuhan Kertas: ");
+  Serial.print(persenKertas);
+  Serial.print("%");
+
+  Serial.print("\nKepenuhan Plastik: ");
+  Serial.print(persenPlastik);
+  Serial.print("%");
 
   delay(500);
 }
