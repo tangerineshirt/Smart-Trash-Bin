@@ -1,15 +1,17 @@
 #include <WiFi.h>
 #include <esp_now.h>
 #include <ESP32Servo.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 
 // ====== KONFIGURASI PIN ======
-#define SERVO_PIN 13
+#define SERVO_PIN 17
 #define US_TRIGGER 5
 #define US_ECHO 4
-#define US_PENUH_KERTAS 18
-#define US_PENUH_ECHO_KERTAS 19
-#define US_PENUH_PLASTIK 21
-#define US_PENUH_ECHO_PLASTIK 22
+#define US_PENUH_KERTAS 12
+#define US_PENUH_ECHO_KERTAS 13
+#define US_PENUH_PLASTIK 41
+#define US_PENUH_ECHO_PLASTIK 42
 
 #define JARAK_SAMPAH_MIN_CM 10
 #define WAKTU_PENUH_MS 10000  // 10 detik stabil di bawah threshold → penuh
@@ -27,11 +29,13 @@ typedef struct struct_message {
 
 struct_message incomingDataStruct;
 
-const long selisihTinggi = 21;
-const long globalMaks = 27;
+const float selisihTinggi = 21;
+const float globalMaks = 27;
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);  // LCD initialization
 
 // ====== FUNGSI ULTRASONIK ======
-long ukurJarakCM(int trigger, int echo) {
+float ukurJarakCM(int trigger, int echo) {
   digitalWrite(trigger, LOW);
   delayMicroseconds(2);
   digitalWrite(trigger, HIGH);
@@ -42,8 +46,8 @@ long ukurJarakCM(int trigger, int echo) {
   return distance;
 }
 
-long hitungPersen(long jarak, long maks){
-  return 100 - (jarak/maks * 100);
+float hitungPersen(float jarak, float maks) {
+  return 100.0 - (jarak / maks * 100.0);
 }
 
 // ====== CALLBACK ESP-NOW ======
@@ -67,6 +71,7 @@ void onReceiveData(const esp_now_recv_info_t *info, const uint8_t *incomingData,
 void setup() {
   Serial.begin(115200);
   WiFi.mode(WIFI_STA);
+  Wire.begin(21, 20);
 
   pinMode(US_TRIGGER, OUTPUT);
   pinMode(US_ECHO, INPUT);
@@ -78,6 +83,9 @@ void setup() {
   servo.attach(SERVO_PIN);
   servo.write(90);  // posisi netral
 
+  lcd.init();
+  lcd.backlight();
+
   if (esp_now_init() != ESP_OK) {
     Serial.println("ESP-NOW init gagal");
     return;
@@ -88,16 +96,16 @@ void setup() {
 
 // ====== LOOP UTAMA ======
 void loop() {
-  long jarakSampah = ukurJarakCM(US_TRIGGER, US_ECHO);
+  float jarakSampah = ukurJarakCM(US_TRIGGER, US_ECHO);
   Serial.print("Jarak sampah: ");
   Serial.print(jarakSampah);
   Serial.println(" cm");
 
-  long penuhKertas = ukurJarakCM(US_PENUH_KERTAS, US_PENUH_ECHO_KERTAS) - selisihTinggi;
-  long penuhPlastik = ukurJarakCM(US_PENUH_PLASTIK, US_PENUH_ECHO_PLASTIK) - selisihTinggi;
-  
-  long persenKertas = hitungPersen(penuhKertas, globalMaks);
-  long persenPlastik = hitungPersen(penuhPlastik, globalMaks);
+  float penuhKertas = ukurJarakCM(US_PENUH_KERTAS, US_PENUH_ECHO_KERTAS) - selisihTinggi;
+  float penuhPlastik = ukurJarakCM(US_PENUH_PLASTIK, US_PENUH_ECHO_PLASTIK) - selisihTinggi;
+
+  float persenKertas = hitungPersen(penuhKertas, globalMaks);
+  float persenPlastik = hitungPersen(penuhPlastik, globalMaks);
 
   // Gerakkan servo jika menerima label dan ada sampah dekat
   if (labelBaruDiterima && jarakSampah < JARAK_SAMPAH_MIN_CM) {
@@ -112,14 +120,14 @@ void loop() {
       servo.write(10);
       jmlKertas = 0;
       jmlPlastik = 0;
-      delay(2000);      // waktu gerakan
+      delay(3000);      // waktu gerakan
       servo.write(90);  // kembali ke netral
     } else if (jmlPlastik >= 5) {
       Serial.println("Sampah ke kanan");
       servo.write(170);
       jmlKertas = 0;
       jmlPlastik = 0;
-      delay(2000);      // waktu gerakan
+      delay(3000);      // waktu gerakan
       servo.write(90);  // kembali ke netral
     }
   }
@@ -131,6 +139,24 @@ void loop() {
   Serial.print("\nKepenuhan Plastik: ");
   Serial.print(persenPlastik);
   Serial.print("%");
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  if (penuhKertas <= 27) {
+    lcd.print("Kertas: FULL");
+  } else {
+    lcd.print("Kertas: ");
+    lcd.print(persenKertas);
+    lcd.print("%");
+  }
+  lcd.setCursor(0, 1);
+
+  if (penuhPlastik <= 27) {
+    lcd.print("Kertas: FULL");
+  } else {
+    lcd.print("Plastik: ");
+    lcd.print(persenPlastik);
+    lcd.print("%");
+  }
 
   delay(500);
 }
