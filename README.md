@@ -18,5 +18,7 @@ This project is an IoT-based smart trash sorting system that uses an ESP32-S3 mi
 - Displays fill percentage on an I²C LCD screen.
 
 # Each folder description
-ESP-CAM: Basic code for ESP-CAM AI Thinker to make sure the device is working properly
-ESP32-S3: Complete code for ESP32-S3 that controls the sensors and actuators
+- ESP-CAM: Basic code for ESP-CAM AI Thinker to make sure the device is working properly
+- ESP32-S3: Complete code for ESP32-S3 that controls the sensors and actuators
+- esp32_camera_inference: Complete code for ESP-CAM containing compressed CNN model for trash classification
+- CameraWebServer: Test whether the Wi-Fi connection for ESP-CAM was working or not
