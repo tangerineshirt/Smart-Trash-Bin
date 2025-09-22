@@ -3,23 +3,26 @@
 #include <ESP32Servo.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
+#include <HCSR04.h>
 
 // ====== KONFIGURASI PIN ======
 #define SERVO_PIN 17
 #define US_TRIGGER 5
 #define US_ECHO 4
-#define US_PENUH_KERTAS 12
-#define US_PENUH_ECHO_KERTAS 13
+#define US_PENUH_KERTAS 9
+#define US_PENUH_ECHO_KERTAS 10
 #define US_PENUH_PLASTIK 41
 #define US_PENUH_ECHO_PLASTIK 42
 
-#define JARAK_SAMPAH_MIN_CM 10
-#define WAKTU_PENUH_MS 10000  // 10 detik stabil di bawah threshold → penuh
-
+#define JARAK_SAMPAH_MIN_CM 12
 // ====== VARIABEL ======
 Servo servo;
 String currentLabel = "";
 bool labelBaruDiterima = false;
+
+UltraSonicDistanceSensor sensorSampah(US_TRIGGER, US_ECHO);
+UltraSonicDistanceSensor sensorKertas(US_PENUH_KERTAS, US_PENUH_ECHO_KERTAS);
+UltraSonicDistanceSensor sensorPlastik(US_PENUH_PLASTIK, US_PENUH_ECHO_PLASTIK);
 
 int jmlKertas = 0, jmlPlastik = 0;
 
@@ -33,22 +36,6 @@ const float selisihTinggi = 21;
 const float globalMaks = 27;
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);  // LCD initialization
-
-// ====== FUNGSI ULTRASONIK ======
-float ukurJarakCM(int trigger, int echo) {
-  digitalWrite(trigger, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigger, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigger, LOW);
-  long duration = pulseIn(echo, HIGH, 30000);  // timeout 30ms
-  long distance = duration * 0.034 / 2;
-  return distance;
-}
-
-float hitungPersen(float jarak, float maks) {
-  return 100.0 - (jarak / maks * 100.0);
-}
 
 // ====== CALLBACK ESP-NOW ======
 void onReceiveData(const esp_now_recv_info_t *info, const uint8_t *incomingData, int len) {
@@ -73,18 +60,12 @@ void setup() {
   WiFi.mode(WIFI_STA);
   Wire.begin(21, 20);
 
-  pinMode(US_TRIGGER, OUTPUT);
-  pinMode(US_ECHO, INPUT);
-  pinMode(US_PENUH_KERTAS, OUTPUT);
-  pinMode(US_PENUH_ECHO_KERTAS, INPUT);
-  pinMode(US_PENUH_PLASTIK, OUTPUT);
-  pinMode(US_PENUH_ECHO_PLASTIK, INPUT);
-
   servo.attach(SERVO_PIN);
   servo.write(90);  // posisi netral
 
   lcd.init();
   lcd.backlight();
+  lcd.clear();
 
   if (esp_now_init() != ESP_OK) {
     Serial.println("ESP-NOW init gagal");
@@ -96,16 +77,25 @@ void setup() {
 
 // ====== LOOP UTAMA ======
 void loop() {
-  float jarakSampah = ukurJarakCM(US_TRIGGER, US_ECHO);
+  float jarakSampah = sensorSampah.measureDistanceCm();
   Serial.print("Jarak sampah: ");
   Serial.print(jarakSampah);
   Serial.println(" cm");
 
-  float penuhKertas = ukurJarakCM(US_PENUH_KERTAS, US_PENUH_ECHO_KERTAS) - selisihTinggi;
-  float penuhPlastik = ukurJarakCM(US_PENUH_PLASTIK, US_PENUH_ECHO_PLASTIK) - selisihTinggi;
+  // // Hitung persentase penuh tong kertas
+  float jarakKertas = sensorKertas.measureDistanceCm();
+  float persenKertas = 100 - (jarakKertas - 20)/27 * 100.0;
 
-  float persenKertas = hitungPersen(penuhKertas, globalMaks);
-  float persenPlastik = hitungPersen(penuhPlastik, globalMaks);
+  // // Batasi nilai persen agar tidak negatif atau lebih dari 100%
+  if (persenKertas < 0) persenKertas = 0;
+  if (persenKertas > 100) persenKertas = 100;
+
+  // // Hitung persentase penuh tong plastik
+  float jarakPlastik = sensorPlastik.measureDistanceCm();
+  float persenPlastik = 100 - (jarakPlastik - 20)/27 * 100.0;
+
+  if (persenPlastik < 0) persenPlastik = 0;
+  if (persenPlastik > 100) persenPlastik = 100;
 
   // Gerakkan servo jika menerima label dan ada sampah dekat
   if (labelBaruDiterima && jarakSampah < JARAK_SAMPAH_MIN_CM) {
@@ -132,31 +122,26 @@ void loop() {
     }
   }
 
-  Serial.print("\nKepenuhan Kertas: ");
-  Serial.print(persenKertas);
-  Serial.print("%");
+  // Serial.print("\nKepenuhan Kertas: ");
+  // Serial.print(persenKertas, 1);
+  // Serial.print("%");
 
-  Serial.print("\nKepenuhan Plastik: ");
-  Serial.print(persenPlastik);
-  Serial.print("%");
-  lcd.clear();
+  // Serial.print("\nKepenuhan Plastik: ");
+  // Serial.print(persenPlastik, 1);
+  // Serial.print("%");
+
+  Serial.println(jarakKertas);
+  Serial.println(jarakPlastik);
+
   lcd.setCursor(0, 0);
-  if (penuhKertas <= 27) {
-    lcd.print("Kertas: FULL");
-  } else {
-    lcd.print("Kertas: ");
-    lcd.print(persenKertas);
-    lcd.print("%");
-  }
-  lcd.setCursor(0, 1);
+  lcd.print("Kertas: ");
+  lcd.print(persenKertas);
+  lcd.print("%");
 
-  if (penuhPlastik <= 27) {
-    lcd.print("Kertas: FULL");
-  } else {
-    lcd.print("Plastik: ");
-    lcd.print(persenPlastik);
-    lcd.print("%");
-  }
+  lcd.setCursor(0, 1);
+  lcd.print("Plastik: ");
+  lcd.print(persenPlastik);
+  lcd.print("%");
 
   delay(500);
 }
