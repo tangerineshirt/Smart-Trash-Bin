@@ -16,3 +16,7 @@ This project is an IoT-based smart trash sorting system that uses an ESP32-S3 mi
 - Two ultrasonic sensors placed above the bins.
 - Calculates real-time fill percentage (0–100%) based on a 27 cm bin depth.
 - Displays fill percentage on an I²C LCD screen.
+
+# Each folder description
+ESP-CAM: Basic code for ESP-CAM AI Thinker to make sure the device is working properly
+ESP32-S3: Complete code for ESP32-S3 that controls the sensors and actuators
